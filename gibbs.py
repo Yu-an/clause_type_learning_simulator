@@ -33,7 +33,6 @@ def xtab(*cols):
     return  xt
 
 
-
 def sampleCfromAS(c_sampled, a, S):
     """Sample clause type labels from speech acts and syntax
     c_sampled (np.arrray): clause type labels from last round
@@ -99,7 +98,7 @@ def simulate_a(delta,a):
     """mix noise into speech act labels
     Args:
         delta (int): proportion of noise in input
-        a (np.array): speech act labels before simulation
+        a (np.array): speech act labels before simulation (e.g. a_true)
 
     Returns:
         a_sim: simuated speech act labels
@@ -112,16 +111,18 @@ def simulate_a(delta,a):
             a_sim[n] = np.random.randint(len(a_uniq))
         else:
             a_sim[n] = a[n]
-    with open("level_"+str(delta)+"/a_sim", "wb") as f:
-        np.save(f, a_sim)
+   
     return a_sim
 
+def simulate_s(delta,s):
+    s_sim = simulate_a(delta,s)    
+    return s_sim
 
 def sampleCfromS(c_sampled, S):
     """sample clause type labels from morpho-syntax (and prosody) labels
 
     Args:
-        c_sampled (np.array): _description_
+        c_sampled (np.array): an array
         S (list of np.array): _description_
 
     Returns:

@@ -22,45 +22,44 @@ FEATURES = ['Subj', 'Obj', 'Verb', 'Aux', 'AuxInvert',
      'InitFunction', 'PreVFunction', 'PostVFunction', "final_rise","VerbMorphology"]
 def load_data():
     with open('input_data/training_data', 'rb') as f:
-        a_true = np.load(f,allow_pickle=True)
-        c_true = np.load(f,allow_pickle=True)
-        s0 = np.load(f,allow_pickle=True)
-        s1 = np.load(f,allow_pickle=True)
-        s2 = np.load(f,allow_pickle=True)
-        s3 = np.load(f,allow_pickle=True)
-        s4 = np.load(f,allow_pickle=True)
-        s5 = np.load(f,allow_pickle=True)
-        s6 = np.load(f,allow_pickle=True)
-        s7 = np.load(f,allow_pickle=True)
-        s8 = np.load(f,allow_pickle=True)
-        s9 = np.load(f,allow_pickle=True)
+            a_true = np.load(f,allow_pickle=True)
+            c_true = np.load(f,allow_pickle=True)
+            s0 = np.load(f,allow_pickle=True)
+            s1 = np.load(f,allow_pickle=True)
+            s2 = np.load(f,allow_pickle=True)
+            s3 = np.load(f,allow_pickle=True)
+            s4 = np.load(f,allow_pickle=True)
+            s5 = np.load(f,allow_pickle=True)
+            s6 = np.load(f,allow_pickle=True)
+            s7 = np.load(f,allow_pickle=True)
+            s8 = np.load(f,allow_pickle=True)
+            s9 = np.load(f,allow_pickle=True)
     print('data is loaded!')
     return a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9
 
-def train_baseline_model(round_number,c_init, S:list, output_dir):
+def train_baseline_model(c_init, S:list, iter_dir):
     c_sampled= c_init
     # sample c from morpho-syntactic (+prosody) features
     for k in tqdm(range(0, 5000)):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromS(c_sampled, S)
         if ((k+1) % 1000) == 0:
-            c_filename = output_dir+f"sims/baseline_rounds/round_{str(round_number+1)}/iter_"+str(k+1)
+            c_filename = iter_dir+f"/iter_"+str(k+1)
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
             print(k+1, " round have finished simulation")
 
-def train_target_model(round_num,c_init, a_sim, delta, S_sim:list,output_dir):
+def train_target_model(c_init, a, S:list,iter_dir):
     c_sampled= c_init
-    # sample c from speech act and morpho-syntactic (prosody) info
-    
+    # sample c from speech act and morpho-syntactic (prosody) info    
     for m in tqdm(range(0, 5000)):
-        c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromAS(c_sampled, a_sim, S_sim)
+        c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromAS(c_sampled, a, S)
         if ((m+1) % 1000) == 0:
-            c_filename = output_dir+f"sims/target_rounds/round_{str(round_num+1)}/level_{delta}/iters/iter_"+str(m+1)
+            c_filename = iter_dir+f"/iters/iter_"+str(m+1)
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
-            print(f'{m+1} iteration for noise level {delta} at round {round} has finished')
+            print(f'{m+1} iteration has finished')
 
 
 def train_models_with_parameters(args):
@@ -95,40 +94,54 @@ def train_models_with_parameters(args):
     # Model initialization
     c_init = np.random.randint(3, size=len(c_true))
     
-    
+    # Model training
     readme += '## Model specification'
     if noise_source == 'a':
-        deltas = range(0,110,10)        
+        deltas = range(0,110,10)
+        for delta in tqdm(deltas):
+            a_sim = gibbs.simulate_a(delta,a_true)
+            for i in tqdm(range(rounds)):
+                iter_dir = f'{output_dir}/sims/baseline_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+                train_baseline_model(c_init, S, iter_dir)
+            print(f'baseline model with noise level {delta} finished training!')
+            for i in tqdm(range(rounds)):                        
+                iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+                train_target_model(c_true, a_sim, S, output_dir)
+            print('target model finished training!')                                
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':
-        deltas = range(0,110,10)        
+        deltas = range(0,110,10)
+        for delta in tqdm(deltas):
+            S_sim = []
+            for i in tqdm(range(rounds)):
+                iter_dir = f'{output_dir}/sims/baseline_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+                train_baseline_model(c_init, S_sim, output_dir)
+            print(f'baseline model with noise level {delta} finished training!')
+            for i in tqdm(range(rounds)):                        
+                iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+                train_target_model(c_true, a_true, S_sim, output_dir)
+            print('target model finished training!')    
         readme += '- morpho-syntax labels were mixed with noise;\n'
-    else:
-        deltas = [0]
+    elif ('a' in noise_source) and ('S' in noise_source):
+        
+        readme += '- both speech act and morpho-syntax labels were mixed with noise;\n'
+    else:        
         readme += '- labels were not mixed with noise;\n'
-    print(len(deltas),' noise level will be sampled!')
+        for i in tqdm(range(rounds)):
+            iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
+            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
+            train_baseline_model(c_init, S, iter_dir)
+        print('baseline model finished training!')
+        for i in tqdm(range(rounds)):
+            iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
+            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
+            train_target_model(c_true, a_true, S, iter_dir)
+        print('target model finished training!')
     
-    if mode =='baseline':
-        readme += '- only baseline model (infer with morpho-syntax features) was trained;\n'
-        for i in tqdm(range(rounds)):
-            train_baseline_model(i,c_init, S, output_dir)
-        print('baseline model finished training!')
-    elif mode == 'target':
-        readme += '- only target model was trained; baseline model might be available;\n'
-        for i in tqdm(range(rounds)):
-            for delta in deltas:
-                a_sim = gibbs.simulate_a(delta,a_true)
-                train_target_model(i,c_true, a_sim, delta, S, output_dir)
-        print('target model finished training!')
-    else:
-        for i in tqdm(range(rounds)):
-            train_baseline_model(i,c_true, S, output_dir)
-        print('baseline model finished training!')
-        for i in tqdm(range(rounds)):
-            for delta in deltas:
-                train_target_model(i,c_true, a_true, delta, S, output_dir)
-        print('target model finished training!')
-        readme += '- both baseline and target model were trained;\n'
                 
     with open(output_dir + 'README.md','w') as f:
         f.write(readme)
