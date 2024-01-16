@@ -1,0 +1,8 @@
+/venv
+*.DS_Store
+/ipython
+/virt
+/.ipynb_checkpoints
+/__pycache__
+/outputs
+/tests
