@@ -16,6 +16,7 @@ import argparse
 import os
 from tqdm import tqdm
 from copy import deepcopy
+from joblib import Parallel,delayed
 import analysis
 
 FEATURES = ['Subj', 'Obj', 'Verb', 'Aux', 'AuxInvert', 
@@ -51,7 +52,7 @@ def train_baseline_model(c_true, S:list, iter_dir):
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
-            print(k+1, " round have finished simulation")
+            print(k+1, " iterations have finished simulation")
 
 def train_target_model(c_true, a, S:list,iter_dir):
    # Model initialization; random
@@ -69,15 +70,18 @@ def train_target_model(c_true, a, S:list,iter_dir):
 
 def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
     print('Vanilla model with no noise will be trained')
-    for i in tqdm(range(rounds)):
-        iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
-        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
-        train_baseline_model(c_true, S, iter_dir)
+    def baseline_model(i):
+        iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'    
+        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+        train_baseline_model(c_true,S,iter_dir)         
+    Parallel(n_jobs=5)(delayed(baseline_model)(i) for i in tqdm(range(rounds)))                                                                 
     print('[DONE] vanilla baseline model finished training')
-    for i in tqdm(range(rounds)):
+    
+    def target_model(i):
         iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
         os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
-        train_target_model(c_true, a_true, S, iter_dir)
+        train_target_model(c_true, a_true, S, iter_dir)        
+    Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
     print('[DONE] vanilla target model finished training')
 
 def train_noisy_a_models(rounds,output_dir,c_true,a_true,S):
@@ -130,7 +134,11 @@ def train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S):
 def train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S):
     
     print("Both morph and speech act will be mixed with noise")
-            
+
+
+def train_biasedA_model(rounds,output_dir,c_true,a_true,S):
+    
+    
 def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     readme = '##Simulation Report\n\n'
     readme+= '###Parameters:\n'
@@ -162,16 +170,19 @@ def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
             
     # Model training
     readme += '## Model specification'
-    if (noise_source == 'a') or (noise_source == 'A'):        
+    if noise_source == 'a':        
         train_noisy_a_models(rounds,output_dir,c_true,a_true,S)                               
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':        
         train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S)
         readme += '- morpho-syntax labels were mixed with noise;\n'
         readme += '-- noise-mixing method: all but one feature mix with noise\n'
-    elif ('a' in noise_source) and ('S' in noise_source):        
+    elif noise_source =='aS':        
         train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S)
         readme += '- both speech act and morpho-syntax labels were mixed with noise;\n'
+    elif noise_source == 'biasedA':
+        train_biasedA_model(rounds,output_dir,c_true,a_true,S)
+        readme += '- speech act labels were compressed to 2, only target model trained;\n'
     else:        
         train_vanilla_model(rounds,output_dir,c_true,a_true,S)        
         readme += '- labels were not mixed with noise;\n'
