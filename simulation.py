@@ -5,9 +5,8 @@ With unsurpervised learning method
 python simulation.py \
     --output_dir 'A_without_prosody' \
     --rounds 12 \
-    --mode 'baseline' \
     --noise 'yes' \
-    --prosody 'yes'
+    --prosody
 """
 
 import gibbs
@@ -16,6 +15,7 @@ import pickle
 import argparse
 import os
 from tqdm import tqdm
+from copy import deepcopy
 import analysis
 
 FEATURES = ['Subj', 'Obj', 'Verb', 'Aux', 'AuxInvert', 
@@ -34,11 +34,15 @@ def load_data():
             s7 = np.load(f,allow_pickle=True)
             s8 = np.load(f,allow_pickle=True)
             s9 = np.load(f,allow_pickle=True)
-    print('data is loaded!')
+    print('[DONE] data loaded;')
+    print(len(s0),' data points in the training data')
+    
     return a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9
 
-def train_baseline_model(c_init, S:list, iter_dir):
-    c_sampled= c_init
+def train_baseline_model(c_true, S:list, iter_dir):
+    # Model initialization; random
+    c_init = np.random.randint(3, size=len(c_true))
+    c_sampled= c_init.copy()
     # sample c from morpho-syntactic (+prosody) features
     for k in tqdm(range(0, 5000)):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromS(c_sampled, S)
@@ -49,7 +53,9 @@ def train_baseline_model(c_init, S:list, iter_dir):
                 np.save(g,c_sampled)
             print(k+1, " round have finished simulation")
 
-def train_target_model(c_init, a, S:list,iter_dir):
+def train_target_model(c_true, a, S:list,iter_dir):
+   # Model initialization; random
+    c_init = np.random.randint(3, size=len(c_true))
     c_sampled= c_init
     # sample c from speech act and morpho-syntactic (prosody) info    
     for m in tqdm(range(0, 5000)):
@@ -61,7 +67,38 @@ def train_target_model(c_init, a, S:list,iter_dir):
                 np.save(g,c_sampled)
             print(f'{m+1} iteration has finished')
 
-def train_noisy_S_models_simplied(rounds,output_dir,c_init,c_true,a_true,S):
+def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
+    for i in tqdm(range(rounds)):
+        iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
+        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
+        train_baseline_model(c_true, S, iter_dir)
+    print('[DONE] vanilla baseline model finished training')
+    for i in tqdm(range(rounds)):
+        iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
+        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
+        train_target_model(c_true, a_true, S, iter_dir)
+    print('[DONE] vanilla target model finished training')
+
+def train_noisy_a_models(rounds,output_dir,c_true,a_true,S):
+    """Models with noisy A
+    this means that speech act is mixed with random data
+    """    
+    for i in tqdm(range(rounds)):
+        iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
+        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+        train_baseline_model(c_true, S, iter_dir)
+    print(f'[DONE] baseline model with noise level {delta} finished training')
+    
+    deltas = range(0,110,10)
+    for delta in tqdm(deltas):
+        a_sim = gibbs.simulate_a(delta,a_true)
+        for i in tqdm(range(rounds)):                        
+            iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
+            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            train_target_model(c_true, a_sim, S, iter_dir)
+        print('[DONE] target model finished training') 
+        
+def train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S):
     """mix noise in morphosyntactic features (simplifed)
     noise mixing method (non-product):
     - Each feature noise at delta, for delta in range(0,110,10) level
@@ -69,42 +106,41 @@ def train_noisy_S_models_simplied(rounds,output_dir,c_init,c_true,a_true,S):
     Reason for non-product:
     - Full permutation will vary 10**10 times; could do but might not be necessary
     """
-    for s_x in S:
-        for delta in range(0,110,10):
+    for feature_index in tqdm(range(len(S))):
+        for delta in tqdm(range(0,110,10)):
+            s_x = S[feature_index]
             s_x_sim = gibbs.simulate_s(delta,s_x)
-            
+            S_sim = deepcopy(S)
+            S_sim[feature_index] = s_x_sim
             for i in tqdm(range(rounds)):
-                iter_dir = f'{output_dir}/sims/baseline_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                iter_dir = f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
                 os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_baseline_model(c_init, S_sim, output_dir)
-            print(f'baseline model with noise level {delta} finished training!')
+                train_baseline_model(c_true, S_sim, iter_dir)
+            print(f'[DONE] baseline model with noise level {delta} finished training')
             for i in tqdm(range(rounds)):                        
-                iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                iter_dir = f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
                 os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_target_model(c_true, a_true, S_sim, output_dir)
-            print('target model finished training!')   
+                train_target_model(c_true, a_true, S_sim, iter_dir)
+            print('[DONE] target model finished training')   
     
-
-def train_models_with_parameters(args):
-    output_dir = 'outputs/'+ args.output_dir +'/'
-    rounds = args.rounds
-    prosody = args.prosody
-    noise_source = args.noise_source
-    
-    
+            
+def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     readme = '##Simulation Report\n\n'
     readme+= '###Parameters:\n'
     a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9 = load_data()
+    if prosody:
+        S = [s0,s1,s2,s3,s4,s5,s6,s7,s8,s9]
+        print('Prosodic feature will be used!')
+    else:
+        S = [s0,s1,s2,s3,s4,s5,s6,s7,s9]
+    print(len(S),'morphosyntactic features will be used')
     for feature in FEATURES:
         if feature =='final_rise':
-            if prosody:
-                print('Prosodic feature will be used!')
-                S = [s0,s2,s3,s4,s5,s6,s7,s8,s9]
+            if prosody:                                
                 readme+=f'- {feature}\n'                
         else:
             readme+=f'- {feature}\n'
-            S = [s0,s2,s3,s4,s5,s6,s7,s9]
-            
+                            
     readme += '###Training specifications\n'
     if rounds:
         rounds = int(rounds)        
@@ -112,51 +148,34 @@ def train_models_with_parameters(args):
     else:
         rounds = 10
         readme += '- 10 rounds of sampling were performed, , each round with 5000 iterations;\n'    
-    print(rounds,' rounds will be trained!')
+    print(rounds,' rounds will be trained')
     
-    # Model initialization
-    c_init = np.random.randint(3, size=len(c_true))
-    
+    with open(output_dir + 'README.md','w') as f:
+        f.write(readme)
+            
     # Model training
     readme += '## Model specification'
     if noise_source == 'a':
-        deltas = range(0,110,10)
-        for delta in tqdm(deltas):
-            a_sim = gibbs.simulate_a(delta,a_true)
-            for i in tqdm(range(rounds)):
-                iter_dir = f'{output_dir}/sims/baseline_rounds/{delta}_percent_noise/round_{str(i+1)}'
-                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_baseline_model(c_init, S, iter_dir)
-            print(f'baseline model with noise level {delta} finished training!')
-            for i in tqdm(range(rounds)):                        
-                iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
-                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_target_model(c_true, a_sim, S, output_dir)
-            print('target model finished training!')                                
+        print('Speech act info will be mixed with noise')
+        train_noisy_a_models(rounds,output_dir,c_true,a_true,S)                               
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':
-        train_noisy_S_models_simplied(rounds,output_dir,c_init,c_true,a_true,S)
+        print('Morphosyntax info will be mixed with noise')
+        train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S)
         readme += '- morpho-syntax labels were mixed with noise;\n'
         readme += '-- noise-mixing method: all but one feature mix with noise\n'
     elif ('a' in noise_source) and ('S' in noise_source):
         
         readme += '- both speech act and morpho-syntax labels were mixed with noise;\n'
-    else:        
+    else:
+        print('Vanilla model with no noise will be trained')
+        train_vanilla_model(rounds,output_dir,c_true,a_true,S)        
         readme += '- labels were not mixed with noise;\n'
-        for i in tqdm(range(rounds)):
-            iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
-            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
-            train_baseline_model(c_init, S, iter_dir)
-        print('baseline model finished training!')
-        for i in tqdm(range(rounds)):
-            iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
-            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
-            train_target_model(c_true, a_true, S, iter_dir)
-        print('target model finished training!')
-    
-                
+        
     with open(output_dir + 'README.md','w') as f:
         f.write(readme)
+                
+    
     
 def main():
     parser = argparse.ArgumentParser(
@@ -182,14 +201,12 @@ def main():
         required=False,
         help="source of noise, 'a' for speech act, 'S' for morpho-syn, default no noise"
     )
-    parser.add_argument(
-        "--mode",
-        required=False,
-        help="possible values: baseline, target; both will be trained if not specified"
-    )
     args = parser.parse_args()
-    
-    train_models_with_parameters(args)
+    output_dir = 'outputs/'+ args.output_dir +'/'
+    rounds = args.rounds
+    prosody = args.prosody
+    noise_source = args.noise_source
+    train_models_with_parameters(output_dir, rounds,prosody,noise_source)
     
 
 if __name__ == "__main__": 

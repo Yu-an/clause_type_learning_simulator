@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import os
+import copy
 
 
 def xtab(*cols):
@@ -103,7 +104,7 @@ def simulate_a(delta,a):
     Returns:
         a_sim: simuated speech act labels
     """
-    a_sim = a
+    a_sim = a.copy()
     a_uniq, counts = np.unique(a,return_counts = True)
     chance = np.random.choice(2, size=len(a), p = [delta/100,1-(delta/100)])
     for n in range(len(chance)):
@@ -126,7 +127,7 @@ def sampleCfromS(c_sampled, S):
         S (list of np.array): _description_
 
     Returns:
-        _type_: _description_
+        c_sampled (updated), posterior_all, likelihood_all
     """
     #hyperparameters
     gamma_0 = 1
