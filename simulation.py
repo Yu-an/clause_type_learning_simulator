@@ -61,13 +61,36 @@ def train_target_model(c_init, a, S:list,iter_dir):
                 np.save(g,c_sampled)
             print(f'{m+1} iteration has finished')
 
+def train_noisy_S_models_simplied(rounds,output_dir,c_init,c_true,a_true,S):
+    """mix noise in morphosyntactic features (simplifed)
+    noise mixing method (non-product):
+    - Each feature noise at delta, for delta in range(0,110,10) level
+    - Other features full knowledge (0% noise) in all 
+    Reason for non-product:
+    - Full permutation will vary 10**10 times; could do but might not be necessary
+    """
+    for s_x in S:
+        for delta in range(0,110,10):
+            s_x_sim = gibbs.simulate_s(delta,s_x)
+            
+            for i in tqdm(range(rounds)):
+                iter_dir = f'{output_dir}/sims/baseline_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+                train_baseline_model(c_init, S_sim, output_dir)
+            print(f'baseline model with noise level {delta} finished training!')
+            for i in tqdm(range(rounds)):                        
+                iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
+                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+                train_target_model(c_true, a_true, S_sim, output_dir)
+            print('target model finished training!')   
+    
 
 def train_models_with_parameters(args):
     output_dir = 'outputs/'+ args.output_dir +'/'
     rounds = args.rounds
     prosody = args.prosody
     noise_source = args.noise_source
-    mode = args.mode
+    
     
     readme = '##Simulation Report\n\n'
     readme+= '###Parameters:\n'
@@ -112,20 +135,9 @@ def train_models_with_parameters(args):
             print('target model finished training!')                                
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':
-        deltas = range(0,110,10)
-        for delta in tqdm(deltas):
-            S_sim = []
-            for i in tqdm(range(rounds)):
-                iter_dir = f'{output_dir}/sims/baseline_rounds/{delta}_percent_noise/round_{str(i+1)}'
-                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_baseline_model(c_init, S_sim, output_dir)
-            print(f'baseline model with noise level {delta} finished training!')
-            for i in tqdm(range(rounds)):                        
-                iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
-                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_target_model(c_true, a_true, S_sim, output_dir)
-            print('target model finished training!')    
+        train_noisy_S_models_simplied(rounds,output_dir,c_init,c_true,a_true,S)
         readme += '- morpho-syntax labels were mixed with noise;\n'
+        readme += '-- noise-mixing method: all but one feature mix with noise\n'
     elif ('a' in noise_source) and ('S' in noise_source):
         
         readme += '- both speech act and morpho-syntax labels were mixed with noise;\n'
