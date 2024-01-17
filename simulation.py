@@ -104,31 +104,32 @@ def train_noisy_a_models(rounds,output_dir,c_true,a_true,S):
             train_target_model(c_true, a_sim, S, iter_dir)
         print('[DONE] target model finished training') 
         
-def train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S):
+def train_noisy_S_models_simplied(rounds,output_dir,feature_index, c_true,a_true,S):
     """mix noise in morphosyntactic features (simplifed)
     noise mixing method (non-product):
     - Each feature noise at delta, for delta in range(0,110,10) level
     - Other features full knowledge (0% noise) in all 
     Reason for non-product:
     - Full permutation will vary 10**10 times; could do but might not be necessary
+    - requires feature_index (0-9) for parallel training
     """
     print('Morphosyntax info will be mixed with noise')
-    for feature_index in tqdm(range(len(S))):
-        for delta in tqdm(range(0,110,10)):
-            s_x = S[feature_index]
-            s_x_sim = gibbs.simulate_s(delta,s_x)
-            S_sim = deepcopy(S)
-            S_sim[feature_index] = s_x_sim
-            for i in tqdm(range(rounds)):
-                iter_dir = f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
-                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_baseline_model(c_true, S_sim, iter_dir)
-            print(f'[DONE] baseline model with noise level {delta} finished training')
-            for i in tqdm(range(rounds)):                        
-                iter_dir = f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
-                os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-                train_target_model(c_true, a_true, S_sim, iter_dir)
-            print('[DONE] target model finished training')   
+    # for feature_index in tqdm(range(len(S))):
+    for delta in tqdm(range(0,110,10)):
+        s_x = S[feature_index]
+        s_x_sim = gibbs.simulate_s(delta,s_x)
+        S_sim = deepcopy(S)
+        S_sim[feature_index] = s_x_sim
+        for i in tqdm(range(rounds)):
+            iter_dir = f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
+            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            train_baseline_model(c_true, S_sim, iter_dir)
+        print(f'[DONE] baseline model with noise level {delta} finished training')
+        for i in tqdm(range(rounds)):                        
+            iter_dir = f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
+            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            train_target_model(c_true, a_true, S_sim, iter_dir)
+        print('[DONE] target model finished training')   
 
 
 def train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S):
@@ -136,8 +137,16 @@ def train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S):
     print("Both morph and speech act will be mixed with noise")
 
 
-def train_biasedA_model(rounds,output_dir,c_true,a_true,S):
-    
+def train_A_with_two_categories_model(rounds,output_dir,c_true,a_true,S):
+    print('Target model with a systematically ')   
+    def target_model(i):
+        a_sim = a_true.copy()
+        # simulate a
+        iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
+        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
+        train_target_model(c_true, a_sim, S, iter_dir)        
+    Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
+    print('[DONE] vanilla target model finished training')
     
 def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     readme = '##Simulation Report\n\n'
@@ -173,15 +182,15 @@ def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     if noise_source == 'a':        
         train_noisy_a_models(rounds,output_dir,c_true,a_true,S)                               
         readme += '- speech act labels were mixed with noise;\n'
-    elif noise_source =='S':        
-        train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S)
+    elif noise_source =='S':   
+        Parallel(n_jobs=5)(delayed(train_noisy_S_models_simplied)(rounds,output_dir,feature_index, c_true,a_true,S) for feature_index in tqdm([0,1,2,3,4,5,6,7,9]))       
         readme += '- morpho-syntax labels were mixed with noise;\n'
         readme += '-- noise-mixing method: all but one feature mix with noise\n'
     elif noise_source =='aS':        
         train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S)
         readme += '- both speech act and morpho-syntax labels were mixed with noise;\n'
     elif noise_source == 'biasedA':
-        train_biasedA_model(rounds,output_dir,c_true,a_true,S)
+        # train_biasedA_model(rounds,output_dir,c_true,a_true,S)
         readme += '- speech act labels were compressed to 2, only target model trained;\n'
     else:        
         train_vanilla_model(rounds,output_dir,c_true,a_true,S)        
