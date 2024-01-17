@@ -68,6 +68,7 @@ def train_target_model(c_true, a, S:list,iter_dir):
             print(f'{m+1} iteration has finished')
 
 def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
+    print('Vanilla model with no noise will be trained')
     for i in tqdm(range(rounds)):
         iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
         os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
@@ -83,6 +84,7 @@ def train_noisy_a_models(rounds,output_dir,c_true,a_true,S):
     """Models with noisy A
     this means that speech act is mixed with random data
     """    
+    print('Speech act info will be mixed with noise')
     for i in tqdm(range(rounds)):
         iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
         os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
@@ -106,6 +108,7 @@ def train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S):
     Reason for non-product:
     - Full permutation will vary 10**10 times; could do but might not be necessary
     """
+    print('Morphosyntax info will be mixed with noise')
     for feature_index in tqdm(range(len(S))):
         for delta in tqdm(range(0,110,10)):
             s_x = S[feature_index]
@@ -122,7 +125,11 @@ def train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S):
                 os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
                 train_target_model(c_true, a_true, S_sim, iter_dir)
             print('[DONE] target model finished training')   
+
+
+def train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S):
     
+    print("Both morph and speech act will be mixed with noise")
             
 def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     readme = '##Simulation Report\n\n'
@@ -155,20 +162,17 @@ def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
             
     # Model training
     readme += '## Model specification'
-    if noise_source == 'a':
-        print('Speech act info will be mixed with noise')
+    if (noise_source == 'a') or (noise_source == 'A'):        
         train_noisy_a_models(rounds,output_dir,c_true,a_true,S)                               
         readme += '- speech act labels were mixed with noise;\n'
-    elif noise_source =='S':
-        print('Morphosyntax info will be mixed with noise')
+    elif noise_source =='S':        
         train_noisy_S_models_simplied(rounds,output_dir,c_true,a_true,S)
         readme += '- morpho-syntax labels were mixed with noise;\n'
         readme += '-- noise-mixing method: all but one feature mix with noise\n'
-    elif ('a' in noise_source) and ('S' in noise_source):
-        
+    elif ('a' in noise_source) and ('S' in noise_source):        
+        train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S)
         readme += '- both speech act and morpho-syntax labels were mixed with noise;\n'
-    else:
-        print('Vanilla model with no noise will be trained')
+    else:        
         train_vanilla_model(rounds,output_dir,c_true,a_true,S)        
         readme += '- labels were not mixed with noise;\n'
         
@@ -203,6 +207,7 @@ def main():
     )
     args = parser.parse_args()
     output_dir = 'outputs/'+ args.output_dir +'/'
+    os.makedirs(os.path.dirname(output_dir),exist_ok=True)
     rounds = args.rounds
     prosody = args.prosody
     noise_source = args.noise_source
