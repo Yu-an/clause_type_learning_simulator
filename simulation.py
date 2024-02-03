@@ -48,10 +48,12 @@ def train_baseline_model(c_true, S:list, iter_dir):
     for k in tqdm(range(0, 5000)):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromS(c_sampled, S)
         if ((k+1) % 1000) == 0:
-            c_filename = iter_dir+f"/iter_"+str(k+1)
+            c_filename = iter_dir+f"iter_"+str(k+1)
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
+                np.save(g,posterior_all)
+                np.save(g,likelihood_all)
             print(k+1, " iterations have finished simulation")
 
 def train_target_model(c_true, a, S:list,iter_dir):
@@ -62,10 +64,12 @@ def train_target_model(c_true, a, S:list,iter_dir):
     for m in tqdm(range(0, 5000)):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromAS(c_sampled, a, S)
         if ((m+1) % 1000) == 0:
-            c_filename = iter_dir+f"/iters/iter_"+str(m+1)
+            c_filename = iter_dir+f"iter_"+str(m+1)
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
+                np.save(g,posterior_all)
+                np.save(g,likelihood_all)
             print(f'{m+1} iteration has finished')
 
 def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
@@ -102,6 +106,8 @@ def train_noisy_a_models(rounds,output_dir,c_true,a_true,S):
             iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
             os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
             train_target_model(c_true, a_sim, S, iter_dir)
+            with open(iter_dir+'a_sim','wb') as g:
+                np.save(g,a_sim)
         print('[DONE] target model finished training') 
         
 def train_noisy_S_models_simplied(rounds,output_dir,feature_index, c_true,a_true,S):
@@ -115,19 +121,23 @@ def train_noisy_S_models_simplied(rounds,output_dir,feature_index, c_true,a_true
     """
     print('Morphosyntax info will be mixed with noise')
     # for feature_index in tqdm(range(len(S))):
-    for delta in tqdm(range(0,110,10)):
+    for delta in tqdm(range(10,110,10)):
         s_x = S[feature_index]
         s_x_sim = gibbs.simulate_s(delta,s_x)
         S_sim = deepcopy(S)
         S_sim[feature_index] = s_x_sim
         for i in tqdm(range(rounds)):
-            iter_dir = f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
+            iter_dir = f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}/'
             os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            with open(iter_dir+'S_sim.pkl', "wb") as g:
+                np.save(g,S_sim)
             train_baseline_model(c_true, S_sim, iter_dir)
         print(f'[DONE] baseline model with noise level {delta} finished training')
         for i in tqdm(range(rounds)):                        
-            iter_dir = f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}'
+            iter_dir = f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}/'            
             os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            with open(iter_dir+'S_sim.pkl', "wb") as g:
+                np.save(g,S_sim)
             train_target_model(c_true, a_true, S_sim, iter_dir)
         print('[DONE] target model finished training')   
 
@@ -154,10 +164,10 @@ def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9 = load_data()
     if prosody:
         S = [s0,s1,s2,s3,s4,s5,s6,s7,s8,s9]
-        print('Prosodic feature will be used!')
+        print('Both Morpho-syntactic and Prosodic feature will be used')
     else:
         S = [s0,s1,s2,s3,s4,s5,s6,s7,s9]
-    print(len(S),'morphosyntactic features will be used')
+    print(len(S),'Only morphosyntactic features will be used')
     for feature in FEATURES:
         if feature =='final_rise':
             if prosody:                                
@@ -183,7 +193,7 @@ def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
         train_noisy_a_models(rounds,output_dir,c_true,a_true,S)                               
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':   
-        Parallel(n_jobs=5)(delayed(train_noisy_S_models_simplied)(rounds,output_dir,feature_index, c_true,a_true,S) for feature_index in tqdm([0,1,2,3,4,5,6,7,9]))       
+        Parallel(n_jobs=9)(delayed(train_noisy_S_models_simplied)(rounds,output_dir,feature_index, c_true,a_true,S) for feature_index in tqdm(range(len(S))))       
         readme += '- morpho-syntax labels were mixed with noise;\n'
         readme += '-- noise-mixing method: all but one feature mix with noise\n'
     elif noise_source =='aS':        
@@ -226,7 +236,7 @@ def main():
         help="source of noise, 'a' for speech act, 'S' for morpho-syn, default no noise"
     )
     args = parser.parse_args()
-    output_dir = 'outputs/'+ args.output_dir +'/'
+    output_dir = 'outputs/'+ args.output_dir
     os.makedirs(os.path.dirname(output_dir),exist_ok=True)
     rounds = args.rounds
     prosody = args.prosody
