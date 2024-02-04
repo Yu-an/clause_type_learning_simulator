@@ -3,10 +3,11 @@ Simulating the learning of clause type categories
 With unsurpervised learning method
 
 python simulation.py \
-    --output_dir 'A_without_prosody' \
-    --rounds 12 \
-    --noise 'yes' \
-    --prosody
+    --input_data 'input_data_prosody/training_data' \
+    --output_dir 'NoisyA_1round_20240201' \
+    --rounds 1 \
+    --noise_source 'a' \
+    --prosody 'yes'
 """
 
 import gibbs
@@ -21,8 +22,8 @@ import analysis
 
 FEATURES = ['Subj', 'Obj', 'Verb', 'Aux', 'AuxInvert', 
      'InitFunction', 'PreVFunction', 'PostVFunction', "final_rise","VerbMorphology"]
-def load_data():
-    with open('input_data/training_data', 'rb') as f:
+def load_data(input_data):
+    with open(input_data, 'rb') as f:
             a_true = np.load(f,allow_pickle=True)
             c_true = np.load(f,allow_pickle=True)
             s0 = np.load(f,allow_pickle=True)
@@ -88,27 +89,28 @@ def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
     Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
     print('[DONE] vanilla target model finished training')
 
-def train_noisy_a_models(rounds,output_dir,c_true,a_true,S):
+def train_noisy_a_models(rounds,output_dir,c_true,a_true,S,baseline=None):
     """Models with noisy A
     this means that speech act is mixed with random data
-    """    
-    print('Speech act info will be mixed with noise')
-    for i in tqdm(range(rounds)):
-        iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'
-        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-        train_baseline_model(c_true, S, iter_dir)
-    print(f'[DONE] baseline model with noise level {delta} finished training')
+    """
+    if baseline:        
+        print('Speech act info will be mixed with noise')
+        for i in tqdm(range(rounds)):
+            iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}/'
+            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            train_baseline_model(c_true, S, iter_dir)
+        print(f'[DONE] baseline model finished training')
     
     deltas = range(0,110,10)
     for delta in tqdm(deltas):
         a_sim = gibbs.simulate_a(delta,a_true)
         for i in tqdm(range(rounds)):                        
-            iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}'
+            iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}/'
             os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
             train_target_model(c_true, a_sim, S, iter_dir)
             with open(iter_dir+'a_sim','wb') as g:
                 np.save(g,a_sim)
-        print('[DONE] target model finished training') 
+        print('[DONE] target model with noise level {delta} finished training') 
         
 def train_noisy_S_models_simplied(rounds,output_dir,feature_index, c_true,a_true,S):
     """mix noise in morphosyntactic features (simplifed)
@@ -158,10 +160,10 @@ def train_A_with_two_categories_model(rounds,output_dir,c_true,a_true,S):
     Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
     print('[DONE] vanilla target model finished training')
     
-def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
+def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_source,baseline=None):
     readme = '##Simulation Report\n\n'
     readme+= '###Parameters:\n'
-    a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9 = load_data()
+    a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9 = load_data(input_data)
     if prosody:
         S = [s0,s1,s2,s3,s4,s5,s6,s7,s8,s9]
         print('Both Morpho-syntactic and Prosodic feature will be used')
@@ -190,7 +192,7 @@ def train_models_with_parameters(output_dir, rounds,prosody,noise_source):
     # Model training
     readme += '## Model specification'
     if noise_source == 'a':        
-        train_noisy_a_models(rounds,output_dir,c_true,a_true,S)                               
+        train_noisy_a_models(rounds,output_dir,c_true,a_true,S,baseline)                               
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':   
         Parallel(n_jobs=9)(delayed(train_noisy_S_models_simplied)(rounds,output_dir,feature_index, c_true,a_true,S) for feature_index in tqdm(range(len(S))))       
@@ -216,6 +218,11 @@ def main():
         description="Read model training parameters"
     )
     parser.add_argument(
+        "--input_data",
+        required=True,
+        help="e.g. input_data_prosody/training_data "
+    )
+    parser.add_argument(
         "--output_dir",
         required=True,
         help="name of the output folder; will be placed under 'output/' dir"
@@ -235,16 +242,26 @@ def main():
         required=False,
         help="source of noise, 'a' for speech act, 'S' for morpho-syn, default no noise"
     )
+    parser.add_argument(
+        "--baseline",
+        required=False,
+        help="whether to train baseline model together with target"
+    )
     args = parser.parse_args()
-    output_dir = 'outputs/'+ args.output_dir
+    output_dir = 'outputs/'+ args.output_dir.strip('/')+'/'
     os.makedirs(os.path.dirname(output_dir),exist_ok=True)
     rounds = args.rounds
     prosody = args.prosody
     noise_source = args.noise_source
-    train_models_with_parameters(output_dir, rounds,prosody,noise_source)
+    input_data = args.input_data
+    if args.baseline:
+        baseline = args.baseline
+    else:
+        baseline = None
+    train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_source,baseline)
     
 
 if __name__ == "__main__": 
     main()
 
-
+    
