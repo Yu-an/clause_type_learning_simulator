@@ -244,6 +244,7 @@ def main():
     )
     parser.add_argument(
         "--baseline",
+        default = None,
         required=False,
         help="whether to train baseline model together with target"
     )

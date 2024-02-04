@@ -4,5 +4,5 @@
 /virt
 /.ipynb_checkpoints
 /__pycache__
-/outputs
+# /outputs
 /tests
