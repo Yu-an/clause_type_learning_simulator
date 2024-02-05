@@ -4,8 +4,9 @@ import pickle
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from sklearn.metrics.cluster import rand_score
+from sklearn.metrics.cluster import rand_score, adjusted_rand_score
 import scipy.special as sc
+import os
 
 
 def xtab(*cols):
@@ -175,27 +176,30 @@ def SynfeaturesData(df, value,S):
 
     
 class results:
-    def __init__(self,lang, datadir,iter_num):
+    def __init__(self,lang,input_dir, datadir,iter_num='iter_5000'):
         self.lang = lang
         self.datadir = datadir
         self.iter_num = iter_num
+        self.input_dir = input_dir.strip('/')+'/'
         with open(self.datadir+self.iter_num, "rb") as f:
             self.c_sampled = np.load(f,allow_pickle=True)
             
-        with open(self.datadir+"input_data/df_true","rb") as f:
+        with open(self.input_dir+"/df_true","rb") as f:
             self.df = pickle.load(f)
 
-        with open(self.datadir+'input_data/training_data', 'rb') as f:
+        with open(self.input_dir+'training_data', 'rb') as f:
             self.a = np.load(f,allow_pickle=True)
             self.c_true = np.load(f,allow_pickle=True)
         
-        if "target" in self.iter_num:
-            x = self.datadir+self.iter_num
-            x_list = x.split("/")[:-2]
-            self.simdir = "/".join(x_list)
-            with open(self.simdir+"/a_sim","rb") as f:
-                self.a_sim = np.load(f,allow_pickle=True)
-            
+#         with open(self.datadir + 'S_sim.pkl','rb') as f:
+#             self.S = pickle.load(f) 
+        # if "target" in self.datadir:
+        #     x = self.datadir+self.iter_num
+        #     x_list = x.split("/")[:-2]
+        #     self.simdir = "/".join(x_list)
+        #     with open(self.simdir+"/a_sim","rb") as f:
+        #         self.a_sim = np.load(f,allow_pickle=True)
+        
         
         self.df["C_sampled"] = self.c_sampled
 #         self.df["posterior"] = [[]]*len(self.df)
@@ -226,7 +230,8 @@ class results:
     def rand_score(self):
         self.true_c = self.df["Ctrue"].to_numpy()
         self.clause_rand = rand_score(self.c_sampled, self.true_c)
-        return self.clause_rand
+        self.clause_adj_rand = adjusted_rand_score(self.c_sampled, self.true_c)
+        return self.clause_rand,self.clause_adj_rand
     def engsyn(self):
         self.syn = []
         for s in ["Subj","Obj","Aux", "AuxInvert","Verb", "InitFunction","PreVFunction", "PostVFunction" ]:

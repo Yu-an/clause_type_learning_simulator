@@ -1,0 +1,13 @@
+{
+    "input_data":"input_data_prosody/training_data",
+    "output_dir":"NoisyA_10round_20240201",
+    "rounds": 10,
+    "prosody": "yes",
+    "noise_source":"a",
+    "deltas":{
+        "start":50,
+        "end": 110,
+        "interval":10
+    }
+}
+

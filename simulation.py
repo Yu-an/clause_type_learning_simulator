@@ -7,7 +7,9 @@ python simulation.py \
     --output_dir 'NoisyA_1round_20240201' \
     --rounds 1 \
     --noise_source 'a' \
-    --prosody 'yes'
+    --prosody 'yes' \
+
+Or directly update parameters in configs/, and run run.py
 """
 
 import gibbs
@@ -18,7 +20,7 @@ import os
 from tqdm import tqdm
 from copy import deepcopy
 from joblib import Parallel,delayed
-import analysis
+import visualization as an
 
 FEATURES = ['Subj', 'Obj', 'Verb', 'Aux', 'AuxInvert', 
      'InitFunction', 'PreVFunction', 'PostVFunction', "final_rise","VerbMorphology"]
@@ -89,7 +91,7 @@ def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
     Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
     print('[DONE] vanilla target model finished training')
 
-def train_noisy_a_models(rounds,output_dir,c_true,a_true,S,baseline=None):
+def train_noisy_a_models(rounds,output_dir,c_true,a_true,S,deltas = range(0,110,10), baseline=None):
     """Models with noisy A
     this means that speech act is mixed with random data
     """
@@ -101,7 +103,6 @@ def train_noisy_a_models(rounds,output_dir,c_true,a_true,S,baseline=None):
             train_baseline_model(c_true, S, iter_dir)
         print(f'[DONE] baseline model finished training')
     
-    deltas = range(0,110,10)
     for delta in tqdm(deltas):
         a_sim = gibbs.simulate_a(delta,a_true)
         for i in tqdm(range(rounds)):                        
@@ -149,22 +150,13 @@ def train_noisy_S_and_a_model(rounds,output_dir,c_true,a_true,S):
     print("Both morph and speech act will be mixed with noise")
 
 
-def train_A_with_two_categories_model(rounds,output_dir,c_true,a_true,S):
-    print('Target model with a systematically ')   
-    def target_model(i):
-        a_sim = a_true.copy()
-        # simulate a
-        iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
-        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
-        train_target_model(c_true, a_sim, S, iter_dir)        
-    Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
-    print('[DONE] vanilla target model finished training')
-    
-def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_source,baseline=None):
+   
+def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_source,deltas, baseline=None):    
     readme = '##Simulation Report\n\n'
     readme+= '###Parameters:\n'
     a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9 = load_data(input_data)
-    if prosody:
+    os.makedirs(os.path.dirname(output_dir),exist_ok=True)
+    if prosody=='yes':
         S = [s0,s1,s2,s3,s4,s5,s6,s7,s8,s9]
         print('Both Morpho-syntactic and Prosodic feature will be used')
     else:
@@ -191,8 +183,8 @@ def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_sou
             
     # Model training
     readme += '## Model specification'
-    if noise_source == 'a':        
-        train_noisy_a_models(rounds,output_dir,c_true,a_true,S,baseline)                               
+    if noise_source == 'a':
+        train_noisy_a_models(rounds,output_dir,c_true,a_true,S,deltas,baseline)                               
         readme += '- speech act labels were mixed with noise;\n'
     elif noise_source =='S':   
         Parallel(n_jobs=9)(delayed(train_noisy_S_models_simplied)(rounds,output_dir,feature_index, c_true,a_true,S) for feature_index in tqdm(range(len(S))))       
@@ -219,6 +211,7 @@ def main():
     )
     parser.add_argument(
         "--input_data",
+        default='input_data/training_data',
         required=True,
         help="e.g. input_data_prosody/training_data "
     )
@@ -243,8 +236,12 @@ def main():
         help="source of noise, 'a' for speech act, 'S' for morpho-syn, default no noise"
     )
     parser.add_argument(
+        "--deltas",
+        required=False,
+        help="The noise levels that should be considered; format: str(start_int,end_int,interval_int) "
+    )
+    parser.add_argument(
         "--baseline",
-        default = None,
         required=False,
         help="whether to train baseline model together with target"
     )
@@ -255,14 +252,18 @@ def main():
     prosody = args.prosody
     noise_source = args.noise_source
     input_data = args.input_data
+    if args.deltas:
+        start,end,interval = args.deltas.split(',')
+        deltas = range(start,end,interval)
+    else:
+        deltas = range(0,110,10)
     if args.baseline:
         baseline = args.baseline
     else:
         baseline = None
-    train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_source,baseline)
+    train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_source,deltas, baseline)
     
 
 if __name__ == "__main__": 
     main()
-
     
