@@ -48,8 +48,11 @@ def train_baseline_model(c_true, S:list, iter_dir):
     c_init = np.random.randint(3, size=len(c_true))
     c_sampled= c_init.copy()
     # sample c from morpho-syntactic (+prosody) features
+    posterior_alls = []
+    log_joint_probs = []
     for k in tqdm(range(0, 5000)):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromS(c_sampled, S)
+        posterior_alls.append(posterior_all)
         if ((k+1) % 1000) == 0:
             c_filename = iter_dir+f"iter_"+str(k+1)
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
@@ -58,14 +61,25 @@ def train_baseline_model(c_true, S:list, iter_dir):
                 np.save(g,posterior_all)
                 np.save(g,likelihood_all)
             print(k+1, " iterations have finished simulation")
+        probs = an.LogJointProb_base(c_sampled,S)
+        log_joint_probs.append(probs)
+    with open(iter_dir+'posterio_jointprobs','wb') as f:
+        posterio_jointprobs = {
+            'posteriors':posterior_alls,
+            'log_joint_probs':log_joint_probs
+        }
+        pickle.dump(posterio_jointprobs,f)
 
 def train_target_model(c_true, a, S:list,iter_dir):
    # Model initialization; random
     c_init = np.random.randint(3, size=len(c_true))
     c_sampled= c_init
     # sample c from speech act and morpho-syntactic (prosody) info    
+    posterior_alls = []
+    log_joint_probs = []
     for m in tqdm(range(0, 5000)):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromAS(c_sampled, a, S)
+        posterior_alls.append(posterior_all)
         if ((m+1) % 1000) == 0:
             c_filename = iter_dir+f"iter_"+str(m+1)
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
@@ -74,6 +88,14 @@ def train_target_model(c_true, a, S:list,iter_dir):
                 np.save(g,posterior_all)
                 np.save(g,likelihood_all)
             print(f'{m+1} iteration has finished')
+        probs = an.LogJointProb_base(c_sampled,S)
+        log_joint_probs.append(probs)            
+    with open(iter_dir+'posterio_jointprobs','wb') as f:
+        posterio_jointprobs = {
+            'posteriors':posterior_alls,
+            'log_joint_probs':log_joint_probs
+        }
+        pickle.dump(posterio_jointprobs,f)        
 
 def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
     print('Vanilla model with no noise will be trained')
@@ -161,7 +183,7 @@ def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_sou
         print('Both Morpho-syntactic and Prosodic feature will be used')
     else:
         S = [s0,s1,s2,s3,s4,s5,s6,s7,s9]
-    print(len(S),'Only morphosyntactic features will be used')
+        print(len(S),'Only morphosyntactic features will be used')
     for feature in FEATURES:
         if feature =='final_rise':
             if prosody:                                
