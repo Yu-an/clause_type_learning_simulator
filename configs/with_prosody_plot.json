@@ -1,0 +1,9 @@
+{
+    "input_data":"input_data_prosody/training_data",
+    "output_dir":"JointProb",
+    "rounds": 10,
+    "prosody": "yes",
+    "noise_source":"none",
+    "baseline":"yes"
+}
+

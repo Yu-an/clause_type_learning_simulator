@@ -54,21 +54,23 @@ def train_baseline_model(c_true, S:list, iter_dir):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromS(c_sampled, S)
         posterior_alls.append(posterior_all)
         if ((k+1) % 1000) == 0:
-            c_filename = iter_dir+f"iter_"+str(k+1)
+        # if k+1 == 5000:
+            c_filename = os.path.join(iter_dir,f"iter_"+str(k+1))
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
-                np.save(g,posterior_all)
-                np.save(g,likelihood_all)
+                # np.save(g,posterior_all)
+                # np.save(g,likelihood_all)
             print(k+1, " iterations have finished simulation")
-        probs = an.LogJointProb_base(c_sampled,S)
+        probs = an.LogJointProb_base(c_sampled,S) # log joint probability of the current iteration
         log_joint_probs.append(probs)
-    with open(iter_dir+'posterio_jointprobs','wb') as f:
+    with open(os.path.join(iter_dir,'posterio_jointprobs'),'wb') as f:
         posterio_jointprobs = {
             'posteriors':posterior_alls,
             'log_joint_probs':log_joint_probs
         }
         pickle.dump(posterio_jointprobs,f)
+    an.draw_trace_plot(posterior_alls, log_joint_probs,iter_dir)
 
 def train_target_model(c_true, a, S:list,iter_dir):
    # Model initialization; random
@@ -81,36 +83,41 @@ def train_target_model(c_true, a, S:list,iter_dir):
         c_sampled, posterior_all, likelihood_all = gibbs.sampleCfromAS(c_sampled, a, S)
         posterior_alls.append(posterior_all)
         if ((m+1) % 1000) == 0:
-            c_filename = iter_dir+f"iter_"+str(m+1)
+        # if m+1 ==5000:
+            c_filename = os.path.join(iter_dir,f"iter_"+str(m+1))
             os.makedirs(os.path.dirname(c_filename),exist_ok=True)
             with open(c_filename, "wb") as g:
                 np.save(g,c_sampled)
-                np.save(g,posterior_all)
-                np.save(g,likelihood_all)
+                # np.save(g,posterior_all)
+                # np.save(g,likelihood_all)
             print(f'{m+1} iteration has finished')
         probs = an.LogJointProb_base(c_sampled,S)
         log_joint_probs.append(probs)            
-    with open(iter_dir+'posterio_jointprobs','wb') as f:
+    with open(os.path.join(iter_dir,'posterio_jointprobs'),'wb') as f:
         posterio_jointprobs = {
             'posteriors':posterior_alls,
             'log_joint_probs':log_joint_probs
         }
-        pickle.dump(posterio_jointprobs,f)        
+        pickle.dump(posterio_jointprobs,f)
+    an.draw_trace_plot(posterior_alls, log_joint_probs,iter_dir)
+        
 
-def train_vanilla_model(rounds,output_dir,c_true,a_true,S):
-    print('Vanilla model with no noise will be trained')
-    def baseline_model(i):
-        iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}'    
-        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
-        train_baseline_model(c_true,S,iter_dir)         
-    Parallel(n_jobs=5)(delayed(baseline_model)(i) for i in tqdm(range(rounds)))                                                                 
-    print('[DONE] vanilla baseline model finished training')
+def train_vanilla_model(rounds,output_dir,c_true,a_true,S,baseline=None):
+    print('Vanilla model with no noise will be trained')    
+    # def baseline_model(i):
+    if baseline: 
+        def baseline_model(i):
+            iter_dir = os.path.join(output_dir,'sims','baseline_rounds',f'round_{str(i+1)}')
+            os.makedirs(iter_dir,exist_ok=True)
+            train_baseline_model(c_true,S,iter_dir)    
+        Parallel(n_jobs=2)(delayed(baseline_model)(i) for i in tqdm(range(rounds)))                                                                 
+        print('[DONE] vanilla baseline model finished training')
     
     def target_model(i):
-        iter_dir = f'{output_dir}/sims/target_rounds/round_{str(i+1)}'
-        os.makedirs(os.path.dirname(iter_dir),exist_ok=True)                                        
-        train_target_model(c_true, a_true, S, iter_dir)        
-    Parallel(n_jobs=5)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
+        iter_dir = os.path.join(output_dir,'sims','target_rounds',f'round_{str(i+1)}')
+        os.makedirs(iter_dir,exist_ok=True)                                        
+        train_target_model(c_true, a_true, S, iter_dir)            
+    Parallel(n_jobs=2)(delayed(target_model)(i) for i in tqdm(range(rounds)))        
     print('[DONE] vanilla target model finished training')
 
 def train_noisy_a_models(rounds,output_dir,c_true,a_true,S,deltas = range(0,110,10), baseline=None):
@@ -120,16 +127,16 @@ def train_noisy_a_models(rounds,output_dir,c_true,a_true,S,deltas = range(0,110,
     if baseline:        
         print('Speech act info will be mixed with noise')
         for i in tqdm(range(rounds)):
-            iter_dir = f'{output_dir}/sims/baseline_rounds/round_{str(i+1)}/'
-            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            iter_dir = os.path.join(output_dir,'sims','baseline_rounds',f'round_{str(i+1)}')
+            os.makedirs(iter_dir,exist_ok=True)
             train_baseline_model(c_true, S, iter_dir)
         print(f'[DONE] baseline model finished training')
     
     for delta in tqdm(deltas):
         a_sim = gibbs.simulate_a(delta,a_true)
         for i in tqdm(range(rounds)):                        
-            iter_dir = f'{output_dir}/sims/target_rounds/{delta}_percent_noise/round_{str(i+1)}/'
-            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            iter_dir = os.path.join(output_dir,'sims','target_rounds',f'{delta}_percent_noise',f'round_{str(i+1)}')
+            os.makedirs(iter_dir,exist_ok=True)
             train_target_model(c_true, a_sim, S, iter_dir)
             with open(iter_dir+'a_sim','wb') as g:
                 np.save(g,a_sim)
@@ -152,15 +159,17 @@ def train_noisy_S_models_simplied(rounds,output_dir,feature_index, c_true,a_true
         S_sim = deepcopy(S)
         S_sim[feature_index] = s_x_sim
         for i in tqdm(range(rounds)):
-            iter_dir = f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}/'
-            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            iter_dir = os.path.join(output_dir,'sims','baseline_rounds',f'noisy_feature_{feature_index}',f'{delta}_percent+noise',f'round_{str(i+1)}')
+            # f'{output_dir}/sims/baseline_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}/'
+            os.makedirs(iter_dir,exist_ok=True)
             with open(iter_dir+'S_sim.pkl', "wb") as g:
                 np.save(g,S_sim)
             train_baseline_model(c_true, S_sim, iter_dir)
         print(f'[DONE] baseline model with noise level {delta} finished training')
         for i in tqdm(range(rounds)):                        
-            iter_dir = f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}/'            
-            os.makedirs(os.path.dirname(iter_dir),exist_ok=True)
+            iter_dir = os.path.join(output_dir,'sims','target_rounds',f'noisy_feature_{feature_index}',f'{delta}_percent_noise',f'round_{str(i+1)}')
+            # f'{output_dir}/sims/target_rounds/noisy_feature_{feature_index}/{delta}_percent_noise/round_{str(i+1)}/'            
+            os.makedirs(iter_dir,exist_ok=True)
             with open(iter_dir+'S_sim.pkl', "wb") as g:
                 np.save(g,S_sim)
             train_target_model(c_true, a_true, S_sim, iter_dir)
@@ -177,7 +186,7 @@ def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_sou
     readme = '##Simulation Report\n\n'
     readme+= '###Parameters:\n'
     a_true, c_true, s0,s1,s2,s3,s4,s5,s6,s7,s8,s9 = load_data(input_data)
-    os.makedirs(os.path.dirname(output_dir),exist_ok=True)
+    os.makedirs(output_dir,exist_ok=True)
     if prosody=='yes':
         S = [s0,s1,s2,s3,s4,s5,s6,s7,s8,s9]
         print('Both Morpho-syntactic and Prosodic feature will be used')
@@ -200,7 +209,7 @@ def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_sou
         readme += '- 10 rounds of sampling were performed, , each round with 5000 iterations;\n'    
     print(rounds,' rounds will be trained')
     
-    with open(output_dir + 'README.md','w') as f:
+    with open(os.path.join(output_dir, 'README.md'),'w') as f:
         f.write(readme)
             
     # Model training
@@ -219,10 +228,10 @@ def train_models_with_parameters(input_data,output_dir, rounds,prosody,noise_sou
         # train_biasedA_model(rounds,output_dir,c_true,a_true,S)
         readme += '- speech act labels were compressed to 2, only target model trained;\n'
     else:        
-        train_vanilla_model(rounds,output_dir,c_true,a_true,S)        
+        train_vanilla_model(rounds,output_dir,c_true,a_true,S,baseline)        
         readme += '- labels were not mixed with noise;\n'
         
-    with open(output_dir + 'README.md','w') as f:
+    with open(os.path.join(output_dir,'README.md'),'w') as f:
         f.write(readme)
                 
     
@@ -268,7 +277,7 @@ def main():
         help="whether to train baseline model together with target"
     )
     args = parser.parse_args()
-    output_dir = 'outputs/'+ args.output_dir.strip('/')+'/'
+    output_dir = 'outputs'
     os.makedirs(os.path.dirname(output_dir),exist_ok=True)
     rounds = args.rounds
     prosody = args.prosody

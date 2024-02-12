@@ -18,11 +18,11 @@ with open('configs/'+conf_file) as f:
     configs = json.loads(f.read())
 
 input_data = configs.get("input_data",'input_')
-output_dir = 'outputs/'+ configs.get("output_dir").strip('/')+'/'
+output_dir = 'outputs/'+ configs.get("output_dir")
 rounds = configs.get('rounds',10)
 prosody = configs.get('prosody','no')
 noise_source = configs.get('noise_source','a')
-os.makedirs(os.path.dirname(output_dir),exist_ok=True)
+os.makedirs(output_dir,exist_ok=True)
 if configs.get("deltas"):
     start= configs.get("deltas").get("start",0)
     end = configs.get('deltas').get('end',110)
@@ -32,7 +32,7 @@ else:
     deltas = range(0,110,10)
 baseline = configs.get("baseline",None)
 
-with open(output_dir+'config.pkl','w') as f:
+with open(os.path.join(output_dir,'config.pkl'),'w') as f:
     json.dump(configs,f)
 print('[DONE] Configs loaded, copied to ', output_dir)
 

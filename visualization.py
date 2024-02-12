@@ -43,10 +43,25 @@ def PivotTab(df, var1, var2):
     return df_targetp
 
 def lnB(alpha):
+    """I have no idea what this function does anymore AHHHHHH
+
+    Args:
+        alpha (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     nom = np.sum(sc.gammaln(alpha)) - sc.gammaln(np.sum(alpha))
     return nom
 
 def LogJointProb(a,c,S):
+    """calculate the log joint probability of the target model and its parameters
+
+    Args:
+        a (np.array): true a or a_sim (if noisy)
+        c (np.array): c_sampled
+        S (list of np.array): list of parameter values (make sure prosody in or out)
+    """
     alpha = np.ones(len(np.unique(a)))
     beta_a = np.ones((len(np.unique(a)),len(np.unique(c))))
     gamma_0 = np.ones((len(np.unique(c)),2))
@@ -86,6 +101,15 @@ def LogJointProb_base(c,S):
     P_S = np.sum(np.array(P_S_set))
     return(p_c_beta+ P_S)
 
+def draw_trace_plot(posterior_alls, log_joint_probs,output_dir):
+    # not sure how to draw trace plot for posterior, first do log
+    plt.plot(log_joint_probs)
+    plt.xlabel('Iteration')
+    plt.ylabel('Log Joint Probability')
+    plt.title('Log Joint Probability over Iterations')
+    plt.savefig(os.path.join(output_dir,"log_joint_probability_over_iters.pdf"),bbox_inches="tight", pad_inches=1)
+
+    
 def syn_cluster(df, cluster, color0,color1):
     df_part = df[df["C_sampled"]==cluster].reset_index()
     S = ["Subj","Aux", "AuxInvert", "InitFunction" ,"PreVFunction", "PostVFunction"]
